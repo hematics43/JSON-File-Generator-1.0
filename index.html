@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>JSON File Generator — Final</title>
+<style>
+  :root{ --bg:#071029; --card:#071427; --muted:#9fb0c8; --accent:#60a5fa; --danger:#fb7185; --glass: rgba(255,255,255,0.03); --radius:12px; }
+  *{box-sizing:border-box;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial;}
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#041026 0%, #071427 70%); color:#e6eef8}
+  .wrap{max-width:1100px;margin:20px auto;padding:14px;}
+  .app{display:grid;grid-template-columns:1fr 420px;gap:16px;align-items:start}
+  .card{background:linear-gradient(180deg,var(--glass), rgba(255,255,255,0.01)); border-radius:12px;padding:14px; box-shadow:0 6px 22px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.04)}
+  header{display:flex;align-items:center;gap:12px}
+  h1{margin:0;font-size:16px}
+  .muted{color:var(--muted);font-size:13px}
+  .toolbar{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  .split{display:flex;gap:8px;align-items:center}
+  button{background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit;padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:600}
+  button.primary{background:linear-gradient(90deg,var(--accent),#3b82f6);color:#062a47;border:none}
+  button.ghost{background:transparent;border:1px dashed rgba(255,255,255,0.04)}
+  input[type="text"], select{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px;border-radius:8px;color:inherit}
+  .builder{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+  .fields{display:flex;flex-direction:column;gap:8px;max-height:62vh;overflow:auto;padding-right:6px}
+  .field{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.02);padding:8px;border-radius:8px}
+  .field input[type="text"]{min-width:80px}
+  .field .grow{flex:1}
+  textarea#raw{width:100%;min-height:44vh;resize:vertical;background:#021226;color:#cfe6ff;border-radius:10px;border:1px solid rgba(255,255,255,0.03);padding:12px;font-family:monospace;font-size:13px}
+  .bottom{display:flex;justify-content:space-between;align-items:center}
+  .badge{background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:999px;color:var(--muted);font-size:13px;border:1px solid rgba(255,255,255,0.02)}
+  .error{color:var(--danger);font-weight:700}
+  .nested{margin-left:10px;border-left:2px dashed rgba(255,255,255,0.02);padding-left:10px}
+  .small{font-size:12px}
+  .file-input{display:none}
+  @media (max-width:980px){ .app{grid-template-columns:1fr; } textarea#raw{min-height:28vh} .fields{max-height:34vh} }
+  /* touch target improvements */
+  button,input,select,textarea{touch-action:manipulation}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="app">
+    <div class="card" aria-label="JSON Builder">
+      <header>
+        <div>
+          <h1>JSON File Generator</h1>
+          <div class="muted small">Build JSON visually, edit raw, import & export. Mobile friendly.</div>
+        </div>
+      </header>
+
+      <div class="toolbar" role="toolbar" aria-label="controls">
+        <div class="split">
+          <button id="addFieldBtn">➕ Add Field</button>
+          <button id="addObjBtn">🧩 Add Object</button>
+          <button id="addArrBtn">📚 Add Array</button>
+        </div>
+
+        <div style="margin-left:auto" class="split">
+          <input id="filenameInput" type="text" value="data" placeholder="Filename (no extension)" aria-label="filename" style="width:140px">
+          <button id="resetVerBtn" class="ghost" title="Reset version counter">🔁 Reset v</button>
+          <label class="badge small" title="Mode selector">Mode:
+            <select id="modeSelect" style="margin-left:8px;background:transparent;border:none;color:inherit">
+              <option value="builder">Builder</option>
+              <option value="raw">Raw JSON</option>
+            </select>
+          </label>
+          <input id="fileInput" class="file-input" type="file" accept=".json,application/json" />
+          <button id="importBtn">📂 Import</button>
+          <button id="downloadBtn" class="primary">⬇️ Download</button>
+        </div>
+      </div>
+
+      <div class="builder" id="builderArea">
+        <div class="fields" id="fieldsRoot" aria-live="polite"></div>
+
+        <div class="bottom">
+          <div class="muted small">Tip: Tap fields to edit; use Delete to remove. State is saved locally.</div>
+          <div class="actions">
+            <button id="toRawBtn">View Raw</button>
+            <button id="clearBtn" class="ghost">Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card preview" aria-label="Preview and raw editor">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
+        <div>
+          <div class="muted small">JSON Preview</div>
+          <div style="font-weight:700;font-size:15px;margin-top:2px">Live JSON</div>
+        </div>
+        <div class="split">
+          <div id="validBadge" class="badge small">Valid: <strong id="validState">true</strong></div>
+          <div class="badge small">v: <span id="verDisplay">1</span></div>
+          <button id="copyBtn">📋 Copy</button>
+        </div>
+      </div>
+
+      <textarea id="raw" spellcheck="false" aria-label="Raw JSON editor"></textarea>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+        <div class="muted small">Edit raw JSON, then press Apply to sync back to builder.</div>
+        <div><button id="applyBtn">Apply</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Final single-file JSON generator
+   - Mobile-friendly UI
+   - Filename + persistent versioning via localStorage
+   - Persist builder JSON between reloads
+   - Import/Export, Copy, Validate, Apply
+*/
+
+const LS_KEYS = { filename: 'jfg_filename', version: 'jfg_version', state: 'jfg_state' };
+const fieldsRoot = document.getElementById('fieldsRoot');
+const rawTextarea = document.getElementById('raw');
+const addFieldBtn = document.getElementById('addFieldBtn');
+const addObjBtn = document.getElementById('addObjBtn');
+const addArrBtn = document.getElementById('addArrBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const importBtn = document.getElementById('importBtn');
+const fileInput = document.getElementById('fileInput');
+const copyBtn = document.getElementById('copyBtn');
+const applyBtn = document.getElementById('applyBtn');
+const validState = document.getElementById('validState');
+const validBadge = document.getElementById('validBadge');
+const modeSelect = document.getElementById('modeSelect');
+const builderArea = document.getElementById('builderArea');
+const toRawBtn = document.getElementById('toRawBtn');
+const clearBtn = document.getElementById('clearBtn');
+const filenameInput = document.getElementById('filenameInput');
+const verDisplay = document.getElementById('verDisplay');
+const resetVerBtn = document.getElementById('resetVerBtn');
+
+let idCounter = 0;
+
+/* Persistence helpers */
+function saveToLocal(key, value){ try{ localStorage.setItem(key, JSON.stringify(value)); }catch(e){} }
+function loadFromLocal(key, fallback){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }catch(e){ return fallback; } }
+
+/* Versioning */
+let versionCounter = loadFromLocal(LS_KEYS.version, 1);
+verDisplay.textContent = versionCounter;
+filenameInput.value = loadFromLocal(LS_KEYS.filename, 'data');
+resetVerBtn.onclick = ()=>{ if(confirm('Reset version counter to 1?')){ versionCounter = 1; saveToLocal(LS_KEYS.version, versionCounter); verDisplay.textContent = versionCounter; } };
+
+function getNextFilename(){ const base = (filenameInput.value||'data').trim() || 'data'; const fname = `${base}_v${versionCounter}.json`; versionCounter++; saveToLocal(LS_KEYS.version, versionCounter); verDisplay.textContent = versionCounter; saveToLocal(LS_KEYS.filename, filenameInput.value); return fname; }
+
+/* Utility create element */
+function el(tag, attrs={}, ...children){ const node = document.createElement(tag); for(const k in attrs){ if(k==='class') node.className = attrs[k]; else if(k==='html') node.innerHTML = attrs[k]; else node.setAttribute(k, attrs[k]); } for(const c of children) if(c) node.appendChild(typeof c==='string' ? document.createTextNode(c) : c); return node; }
+
+/* Field factory */
+function makeField({key='', type='string', value='' } = {}){
+  const id = 'f'+(++idCounter);
+  const container = el('div',{class:'field','data-id':id});
+  const keyInput = el('input',{type:'text',placeholder:'key',value:key, 'aria-label':'field key'});
+  const typeSelect = el('select',{}, el('option',{value:'string'},'string'), el('option',{value:'number'},'number'), el('option',{value:'boolean'},'boolean'), el('option',{value:'null'},'null'), el('option',{value:'object'},'object'), el('option',{value:'array'},'array'));
+  typeSelect.value = type;
+  const valInput = el('input',{type:'text',placeholder:'value',value:value,class:'grow','aria-label':'field value'});
+  const del = el('button',{},'✖'); del.title = 'Remove field';
+  container.appendChild(keyInput); container.appendChild(typeSelect); container.appendChild(valInput); container.appendChild(del);
+
+  let nestedArea = null;
+  function toggleToNested(newType){ if(newType==='object' || newType==='array'){ if(!nestedArea){ nestedArea = el('div',{class:'nested'}); container.appendChild(nestedArea); }
+      valInput.style.display = 'none'; nestedArea.innerHTML = '';
+      const info = el('div',{class:'muted small'}, newType==='object' ? 'Object fields:' : 'Array items:');
+      const btn = el('button',{}, '➕ Add Child'); btn.onclick = ()=>{ const child = makeField({key:'',type:'string',value:''}); nestedArea.appendChild(child); rebuildRawFromBuilder(); };
+      nestedArea.appendChild(info); nestedArea.appendChild(btn);
+    } else { if(nestedArea){ nestedArea.remove(); nestedArea = null; } valInput.style.display = ''; } }
+
+  if(type==='object' || type==='array') toggleToNested(type);
+
+  typeSelect.onchange = ()=>{ toggleToNested(typeSelect.value); rebuildRawFromBuilder(); };
+  keyInput.oninput = rebuildRawFromBuilder; valInput.oninput = rebuildRawFromBuilder; del.onclick = ()=>{ container.remove(); rebuildRawFromBuilder(); };
+  return container;
+}
+
+/* Build JSON from builder DOM */
+function buildFromBuilder(root = fieldsRoot){ const obj = {}; const children = Array.from(root.children).filter(n=>n.classList && n.classList.contains('field'));
+  children.forEach(node=>{
+    const keyInput = node.querySelector('input[type="text"]');
+    const typeSelect = node.querySelector('select');
+    const valInputs = node.querySelectorAll('input[type="text"]');
+    const valInput = valInputs[valInputs.length-1];
+    const nested = node.querySelector('.nested');
+    const rawKey = keyInput ? keyInput.value.trim() : ''; const key = rawKey === '' ? null : rawKey;
+    const type = typeSelect ? typeSelect.value : 'string';
+
+    if(type==='object' || type==='array'){
+      if(!nested){ if(key===null) return; obj[key] = type==='object' ? {} : []; }
+      else{
+        const nestedFields = Array.from(nested.querySelectorAll(':scope > .field'));
+        const nestedObj = type==='object' ? {} : [];
+        nestedFields.forEach(nf=>{
+          const nKeyInput = nf.querySelector('input[type="text"]');
+          const nType = nf.querySelector('select').value;
+          const nValInput = Array.from(nf.querySelectorAll('input[type="text"]')).pop();
+          const nNested = nf.querySelector('.nested');
+          const nRawKey = nKeyInput ? nKeyInput.value.trim() : ''; const nKey = nRawKey === '' ? null : nRawKey;
+
+          let value;
+          if(nType==='object' || nType==='array'){ value = parseNested(nf); }
+          else value = parsePrimitive(nType, nValInput.value);
+
+          if(type==='object'){ if(nKey===null) return; nestedObj[nKey] = value; }
+          else{ if(nKey!==null && !isNaN(Number(nKey))) nestedObj[Number(nKey)] = value; else nestedObj.push(value); }
+        });
+        if(key===null) return; obj[key] = nestedObj;
+      }
+    } else {
+      const value = parsePrimitive(type, valInput ? valInput.value : ''); if(key===null) return; obj[key] = value;
+    }
+  });
+  return obj;
+}
+
+function parseNested(fieldNode){ const type = fieldNode.querySelector('select').value; const nested = fieldNode.querySelector('.nested'); if(!nested) return type==='object' ? {} : []; const nestedFields = Array.from(nested.querySelectorAll(':scope > .field')); const isObj = type==='object'; const out = isObj ? {} : [];
+  nestedFields.forEach(nf=>{
+    const nKeyInput = nf.querySelector('input[type="text"]'); const nType = nf.querySelector('select').value; const nValInput = Array.from(nf.querySelectorAll('input[type="text"]')).pop(); const nNested = nf.querySelector('.nested'); const nRawKey = nKeyInput ? nKeyInput.value.trim() : ''; const nKey = nRawKey === '' ? null : nRawKey; let value;
+    if(nType==='object' || nType==='array') value = parseNested(nf); else value = parsePrimitive(nType, nValInput.value);
+    if(isObj){ if(nKey===null) return; out[nKey] = value; } else { if(nKey!==null && !isNaN(Number(nKey))) out[Number(nKey)] = value; else out.push(value); }
+  });
+  return out;
+}
+
+function parsePrimitive(type, text){ text = (text ?? '').trim(); if(type==='string') return text; if(type==='number'){ const v = Number(text); return isNaN(v) ? 0 : v; } if(type==='boolean') return text.toLowerCase()==='true'; if(type==='null') return null; return text; }
+
+function rebuildRawFromBuilder(){ try{ const obj = buildFromBuilder(); const pretty = JSON.stringify(obj, null, 2); rawTextarea.value = pretty; validState.textContent = 'true'; validBadge.style.color = ''; saveEditorState(); }catch(e){ validState.textContent = 'false'; validBadge.style.color = 'var(--danger)'; } }
+
+/* populate builder from object */
+function populateBuilderFromObject(obj){ fieldsRoot.innerHTML = ''; function walk(o,parent){ if(typeof o !== 'object' || o===null || Array.isArray(o)) return; for(const [k,v] of Object.entries(o)){ const fieldNode = makeField({key:k,type:inferType(v),value: primitiveToText(v)}); parent.appendChild(fieldNode); if(typeof v === 'object' && v!==null){ const sel = fieldNode.querySelector('select'); sel.value = Array.isArray(v)?'array':'object'; sel.dispatchEvent(new Event('change'));
+          const nestedArea = fieldNode.querySelector('.nested'); if(nestedArea){ for(const [nk,nv] of Object.entries(v)){ const childField = makeField({key: Array.isArray(v)?''+nk:nk, type: inferType(nv), value: primitiveToText(nv)}); nestedArea.appendChild(childField); if(typeof nv === 'object' && nv!==null){ const childSel = childField.querySelector('select'); childSel.value = Array.isArray(nv)?'array':'object'; childSel.dispatchEvent(new Event('change')); const deeper = childField.querySelector('.nested'); if(deeper) walkObjectInto(nv,deeper); } } } } } }
+  function walkObjectInto(o,parent){ for(const [k,v] of Object.entries(o)){ const f = makeField({key: Array.isArray(o)?''+k:k, type: inferType(v), value: primitiveToText(v)}); parent.appendChild(f); if(typeof v === 'object' && v!==null){ const sel = f.querySelector('select'); sel.value = Array.isArray(v)?'array':'object'; sel.dispatchEvent(new Event('change')); const nested = f.querySelector('.nested'); if(nested) walkObjectInto(v,nested); } } }
+  walk(obj, fieldsRoot);
+}
+
+function inferType(v){ if(v===null) return 'null'; if(Array.isArray(v)) return 'array'; if(typeof v==='object') return 'object'; if(typeof v==='number') return 'number'; if(typeof v==='boolean') return 'boolean'; return 'string'; }
+function primitiveToText(v){ if(v===null) return ''; if(typeof v==='object') return ''; return String(v); }
+
+/* File operations */
+function saveTextFile(text, filename){ const blob = new Blob([text],{type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
+
+downloadBtn.onclick = ()=>{ const text = rawTextarea.value; let parsed; try{ parsed = JSON.parse(text); }catch(e){ if(!confirm('JSON is invalid. Download raw text as file anyway?')) return; saveTextFile(text, getNextFilename()); alert('Downloaded raw text file.'); return; } saveTextFile(JSON.stringify(parsed,null,2), getNextFilename()); };
+
+importBtn.onclick = ()=> fileInput.click();
+fileInput.onchange = async (e)=>{ const f = e.target.files[0]; if(!f) return; const txt = await f.text(); try{ const parsed = JSON.parse(txt); rawTextarea.value = JSON.stringify(parsed,null,2); populateBuilderFromObject(parsed); rebuildRawFromBuilder(); alert('Imported JSON successfully.'); }catch(err){ rawTextarea.value = txt; validState.textContent = 'false'; alert('File could not be parsed as JSON; it has been loaded into the Raw editor.'); } fileInput.value = ''; };
+
+copyBtn.onclick = async ()=>{ try{ await navigator.clipboard.writeText(rawTextarea.value); copyBtn.textContent = '✅ Copied'; setTimeout(()=> copyBtn.textContent = '📋 Copy',1400); }catch(e){ alert('Copy failed: '+e.message); } };
+
+applyBtn.onclick = ()=>{ try{ const parsed = JSON.parse(rawTextarea.value); if(typeof parsed !== 'object' || parsed===null || Array.isArray(parsed)){ if(!confirm('Top-level JSON is not an object. Wrap it in {"root": value}?')) return; const wrapped = { root: parsed }; populateBuilderFromObject(wrapped); } else { populateBuilderFromObject(parsed); } rebuildRawFromBuilder(); validState.textContent = 'true'; saveEditorState(); }catch(e){ alert('Invalid JSON: '+e.message); validState.textContent = 'false'; } };
+
+modeSelect.onchange = ()=>{ const mode = modeSelect.value; builderArea.style.display = mode==='builder' ? 'flex' : 'none'; };
+
+addFieldBtn.onclick = ()=>{ fieldsRoot.appendChild(makeField({key:'',type:'string',value:''})); rebuildRawFromBuilder(); };
+addObjBtn.onclick = ()=>{ const n = makeField({key:'',type:'object',value:''}); fieldsRoot.appendChild(n); n.querySelector('select').dispatchEvent(new Event('change')); rebuildRawFromBuilder(); };
+addArrBtn.onclick = ()=>{ const n = makeField({key:'',type:'array',value:''}); fieldsRoot.appendChild(n); n.querySelector('select').dispatchEvent(new Event('change')); rebuildRawFromBuilder(); };
+
+toRawBtn.onclick = ()=>{ modeSelect.value = 'raw'; modeSelect.dispatchEvent(new Event('change')); };
+clearBtn.onclick = ()=>{ if(confirm('Clear all fields?')){ fieldsRoot.innerHTML = ''; rawTextarea.value = '{}'; rebuildRawFromBuilder(); saveEditorState(); } };
+
+rawTextarea.addEventListener('input', ()=>{ try{ JSON.parse(rawTextarea.value); validState.textContent = 'true'; validBadge.style.color = ''; }catch(e){ validState.textContent = 'false'; validBadge.style.color = 'var(--danger)'; } });
+
+/* Autosave builder state to localStorage */
+function saveEditorState(){ try{ const obj = buildFromBuilder(); saveToLocal(LS_KEYS.state, obj); saveToLocal(LS_KEYS.filename, filenameInput.value); }catch(e){} }
+
+/* Load persisted state */n(function init(){
+  const persisted = loadFromLocal(LS_KEYS.state, null);
+  if(persisted && typeof persisted==='object'){
+    populateBuilderFromObject(persisted);
+  } else {
+    const sample = { name: "Example", version: 1, active: true, config: { host: "localhost", port: 8080 }, tags: ["demo","json"] };
+    populateBuilderFromObject(sample);
+  }
+  rebuildRawFromBuilder();
+  // periodic autosave
+  setInterval(saveEditorState, 2000);
+})();
+
+</script>
+</body>
+</html>
